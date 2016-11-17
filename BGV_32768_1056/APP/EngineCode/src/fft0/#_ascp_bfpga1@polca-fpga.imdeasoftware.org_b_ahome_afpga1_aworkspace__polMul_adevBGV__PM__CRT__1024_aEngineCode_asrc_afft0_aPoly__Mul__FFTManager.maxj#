@@ -1,0 +1,154 @@
+ xpackage fft0;
+
+import com.maxeler.maxcompiler.v2.build.EngineParameters;
+import com.maxeler.maxcompiler.v2.managers.custom.CustomManager;
+import com.maxeler.maxcompiler.v2.managers.custom.DFELink;
+import com.maxeler.maxcompiler.v2.managers.custom.blocks.KernelBlock;
+import com.maxeler.maxcompiler.v2.managers.custom.stdlib.MemoryControlGroup;
+import com.maxeler.maxcompiler.v2.managers.engine_interfaces.CPUTypes;
+import com.maxeler.maxcompiler.v2.managers.engine_interfaces.EngineInterface;
+import com.maxeler.maxcompiler.v2.managers.engine_interfaces.EngineInterface.Direction;
+import com.maxeler.maxcompiler.v2.managers.engine_interfaces.InterfaceParam;
+
+
+public class Poly_Mul_FFTManager extends CustomManager{
+
+	private static int N = 16384;// max degree of polynomials is N-1
+	private static final String iN = "7ffe0000002d7f4b";//; // N^-1 mod P = iN
+	private static final int n = 14; //2**n=N , or what is the same, log2(N)=n
+	private static final String P = "80000000002d8001"; // prime used as modulus
+	private static final int  PBits=64, //number of bits needed to represent P
+	  PMinusbit=2981889, //P with its most significant bit removed
+	  PMinusbitBits=22, // number of bits needed to represent PMinusbit
+	  m=128, // 2*PBits maximum length in bits of number for the modular reduction
+	  bit_width=128;	    // 2*PBits (byte-aligned).
+
+	private static final int numticks=(2*n+1)*N/2;
+	//---------------------------------
+    private static CPUTypes TYPE = CPUTypes.INT64;
+	private static final int TYPE_SIZEBYTES = (bit_width)/8;//TYPE.sizeInBytes();
+
+
+	Poly_Mul_FFTManager(EngineParameters engineParameters){
+		super(engineParameters);
+		addMaxFileConstant("N", N);
+		//addMaxFileConstant("iN",iN);
+		//addMaxFileConstant("P", P);
+		addMaxFileConstant("n", n);
+		addMaxFileConstant("TYPE_SIZEBYTES",TYPE_SIZEBYTES);
+		KernelBlock k1 = addKernel(new Poly_Mul_FFTKernel(makeKernelParameters("Poly_Mul_FFTKernel1"), N, iN, P,n,PBits,PMinusbit,PMinusbitBits,m,bit_width,numticks));
+
+		DFELink cpu2lmem = addStreamToOnCardMemory("cpu2lmem", MemoryControlGroup.MemoryAccessPattern.LINEAR_1D);
+		DFELink lmem2cpu = addStreamFromOnCardMemory("lmem2cpu", MemoryControlGroup.MemoryAccessPattern.LINEAR_1D);
+
+		DFELink fromcpu = addStreamFromCPU("fromcpu");
+		DFELink tocpu = addStreamToCPU("tocpu");
+
+		cpu2lmem <== fromcpu;
+		tocpu <== lmem2cpu;
+
+		for(int value=1;value<=2;value++){
+			//DFELink x1 = addStreamFromOnCardMemory("inVector"+value,MemoryControlGroup.MemoryAccessPattern.LINEAR_1D);
+			DFELink x1 = addStreamFromCPU("inVector"+value);
+			k1.getInput("inVector"+value) <== x1;
+			//DFELink BNH1 = addStreamToCPU("BNH"+value);//,MemoryControlGroup.MemoryAccessPattern.LINEAR_1D);
+			//DFELink NHN1 = addStreamToCPU("NHN"+value);//,MemoryControlGroup.MemoryAccessPattern.LINEAR_1D);
+			//BNH1 <== k1.getOutput("BNH"+value);
+			//NHN1 <== k1.getOutput("NHN"+value);
+		}
+		//DFELink result = addStreamToOnCardMemory("resultBNH",MemoryControlGroup.MemoryAccessPattern.LINEAR_1D);
+		//DFELink result2 = addStreamToOnCardMemory("resultNHN",MemoryControlGroup.MemoryAccessPattern.LINEAR_1D);
+		DFELink result = addStreamToCPU("resultBNH");
+		DFELink result2 = addStreamToCPU("resultNHN");
+		result <== k1.getOutput("resultBNH");
+		result2 <== k1.getOutput("resultNHN");
+	}
+
+	private static EngineInterface interfaceWrite(String name) {
+		EngineInterface ei = new EngineInterface(name);
+
+		InterfaceParam sizeInBytes  = ei.addParam("size", CPUTypes.INT32);
+		InterfaceParam start = ei.addParam("start", CPUTypes.INT32);
+		//InterfaceParam sizeInBytes = burstAlign(ei.addConstant(BURSTSIZE),size);
+
+		ei.setStream("fromcpu", TYPE , sizeInBytes );
+		ei.setLMemLinear("cpu2lmem", start, sizeInBytes);
+		ei.ignoreAll(Direction.IN_OUT);
+		return ei;
+	}
+
+	private static EngineInterface interfaceRead(String name) {
+		EngineInterface ei = new EngineInterface(name);
+
+		InterfaceParam sizeInBytes  = ei.addParam("size", CPUTypes.INT32);
+		InterfaceParam start = ei.addParam("start", CPUTypes.INT32);
+		//InterfaceParam sizeInBytes = burstAlign(ei.addConstant(BURSTSIZE), size);
+
+		ei.setLMemLinear("lmem2cpu", start, sizeInBytes);
+		ei.setStream("tocpu", TYPE, sizeInBytes);
+		ei.ignoreAll(Direction.IN_OUT);
+		return ei;
+	}
+	static EngineInterface interfaceDefault() {
+		EngineInterface ei = new EngineInterface();
+		//InterfaceParam inVectorAddress1 = ei.addParam("inVectorAddress1",CPUTypes.INT32);
+		//InterfaceParam inVectorAddress2 = ei.addParam("inVectorAddress2",CPUTypes.INT32);
+		//InterfaceParam BNHAddress1 = ei.addParam("BNHAddress1",CPUTypes.INT32);
+		//InterfaceParam BNHAddress2 = ei.addParam("BNHAddress2",CPUTypes.INT32);
+		//InterfaceParam NHNAddress1 = ei.addParam("NHNAddress1",CPUTypes.INT32);
+		//InterfaceParam NHNAddress2 = ei.addParam("NHNAddress2",CPUTypes.INT32);
+
+
+		InterfaceParam sizeBytesAlign = ei.addConstant(N*TYPE_SIZEBYTES);
+		ei.setTicks("Poly_Mul_FFTKernel1", numticks);
+		InterfaceParam zero = ei.addConstant(0);
+		for(int value = 1;value<=2;value++){
+					//ei.setLMemLinearWrapped("inVector"+value, (value-1)*sizeBytesAlign, sizeBytesAlign,sizeBytesAlign,zero);
+					ei.setStream("inVector"+value, CPUTypes.UINT64, sizeBytesAlign);
+					//ei.setStream("BNH"+value,CPUTypes.INT64,CPUTypes.INT64.sizeInBytes()*N/2);
+					//ei.setStream("NHN"+value,CPUTypes.INT64,CPUTypes.INT64.sizeInBytes()*N/2);
+		}
+		//ei.setLMemLinear("NHN1", NHNAddress1, sizeBytesAlign/2);
+		//ei.setLMemLinear("resultBNH",sizeBytesAlign*2,sizeBytesAlign/2);
+		//ei.setLMemLinear("resultNHN",sizeBytesAlign*5/2,sizeBytesAlign/2);
+		ei.setStream("resultBNH", CPUTypes.UINT64, sizeBytesAlign/2);
+		ei.setStream("resultNHN", CPUTypes.UINT64, sizeBytesAlign/2);
+
+		ei.ignoreAll(Direction.IN_OUT);
+		return ei;
+	}
+
+	private static InterfaceParam burstAlign(InterfaceParam burstSize,InterfaceParam N) {
+		InterfaceParam nPadded = N*CPUTypes.INT64.sizeInBytes();
+		nPadded = nPadded + (burstSize-(nPadded%burstSize));
+		return nPadded;
+	}
+	private static InterfaceParam burstAlignBytes(InterfaceParam burstSize,InterfaceParam Nbytes) {
+		InterfaceParam nPadded = Nbytes + (burstSize-(Nbytes%burstSize));
+		return nPadded;
+	}
+	private static InterfaceParam burstAlign(InterfaceParam burstSize,InterfaceParam N,int numberBytes) {
+		InterfaceParam nPadded = N + (burstSize/numberBytes-(N%(burstSize/numberBytes)));
+		return nPadded;
+	}
+	private static int burstAlignBytes(int burstSize,int Nbytes) {
+		int nPadded = Nbytes + (burstSize-(Nbytes%burstSize));
+		return nPadded;
+	}
+	private static int burstAlign(int burstSize,int N,int numberBytes) {
+		int nPadded = N + (burstSize/numberBytes-(N%(burstSize/numberBytes)));
+		return nPadded;
+	}
+
+
+	public static void main(String[] args) {
+		EngineParameters params = new EngineParameters(args);
+		Poly_Mul_FFTManager manager = new Poly_Mul_FFTManager(params);
+		manager.createSLiCinterface(interfaceWrite("writeLMem"));
+		manager.createSLiCinterface(interfaceRead("readLMem"));
+		manager.createSLiCinterface(interfaceDefault());
+		manager.build();
+	}
+
+
+	}

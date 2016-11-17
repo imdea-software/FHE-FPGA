@@ -1,0 +1,17 @@
+# --- User's custom definitions
+
+# ---
+
+MAXCOMPILER_QUOTE   := $(shell printf %q "$(MAXCOMPILERDIR)")
+
+RUNRULE_ARGS        := 
+RUNRULE_RUNENV      := LD_LIBRARY_PATH="$(MAXELEROSDIR)/lib:$(LD_LIBRARY_PATH)" 
+RUNRULE_MAXFILES    := Poly_Mul_FFT0.max  
+RUNRULE_MAXFILES_H  := Poly_Mul_FFT0.h 
+RUNRULE_CFLAGS      := 
+RUNRULE_LDFLAGS     := 
+
+TARGET_EXEC         := Poly_Mul_FFT
+TARGET_LIBRARY      := 
+
+

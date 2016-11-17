@@ -1,0 +1,72 @@
+Sun 15:55: ########################################## 
+Sun 15:55: Compiling.
+Sun 15:55: ########################################## 
+
+Sun 15:55: MaxCompiler version: 2014.1.
+Sun 15:55: Build DFEFFT1 run rule for devBGV_PM_CRT_1056__ start time: Sun Jan 10 15:55:52 CET 2016.
+Sun 15:55: Project location: /home/fpga1/workspace_polMul/devBGV_PM_CRT_1056__.
+Sun 15:55: Detailed build log: /home/fpga1/workspace_polMul/devBGV_PM_CRT_1056__/RunRules/DFEFFT1/build.log.
+
+Sun 15:55: Compiling Engine Code.
+Sun 15:56: Building Poly_Mul_FFT0.max file. 
+Sun 15:56: Setting environment variable:
+Sun 15:56: MAXCOMPILER_BUILD_DIR : /home/fpga1/workspace_polMul/devBGV_PM_CRT_1056__/RunRules/DFEFFT1/maxfiles
+Sun 15:56: MAX_BUILDPARAMS : DFEModel='CORIA' target='DFE' maxFileName='Poly_Mul_FFT0'  
+Sun 15:56: Building output:
+Sun 15:56: MaxCompiler version: 2014.1
+Sun 15:56: Build "Poly_Mul_FFT0" start time: Sun Jan 10 15:56:55 CET 2016
+Sun 15:56: Main build process running as user fpga1 on host polca-fpga.imdeasoftware.org
+Sun 15:56: Build location: /home/fpga1/workspace_polMul/devBGV_PM_CRT_1056__/RunRules/DFEFFT1/maxfiles/Poly_Mul_FFT0_CORIA_DFE
+Sun 15:56: Detailed build log available in "_build.log"
+Sun 15:56: 
+Sun 15:56: ENGINE BUILD PARAMETERS
+Sun 15:56: 	 Build name: Poly_Mul_FFT0_CORIA_DFE
+Sun 15:56: 	   DFEModel: CORIA                  
+Sun 15:56: 	maxFileName: Poly_Mul_FFT0          
+Sun 15:56: 	     target: DFE                    
+Sun 15:56: 	 enableMPCX: false                  
+Sun 15:56: Instantiating kernel "Poly_Mul_FFTKernel1"
+Sun 15:56: 
+Sun 15:56: Compiling kernel "Poly_Mul_FFTKernel1"
+Sun 15:56: WARNING: Warning (UNCONNECTED_DESIGN_ELEMENT):
+Sun 15:56: WARNING: Unconnected elements in design 'Poly_Mul_FFTKernel1'
+Sun 15:56: WARNING: details in : /home/fpga1/workspace_polMul/devBGV_PM_CRT_1056__/RunRules/DFEFFT1/maxfiles/Poly_Mul_FFT0_CORIA_DFE/scratch/Poly_Mul_FFTKernel1_graph_warnings.txt
+Sun 15:57: Generating input files (VHDL, netlists, MegaWizard/CoreGen)
+Sun 15:58: Running back-end  build (16 phases)
+Sun 15:58: (1/16) - Prepare MaxFile Data (GenerateMaxFileDataFile)
+Sun 15:58: (2/16) - Prepare for Placement (QuartusMap)
+Sun 16:10: (3/16) - Generate Incremental Netlist (QuartusCdb)
+Sun 16:12: (4/16) - Generate Resource Report (AlteraResourceUsageBuildPass)
+Sun 16:12: (5/16) - Generate Annotated Source Code (AlteraResourceAnnotationBuildPass)
+Sun 16:12: (6/16) - Analyse Resource Usage (AlteraResourceCounterPass)
+Sun 16:12: 
+Sun 16:12: About to start chip vendor Map/Place/Route toolflow. This will take some time.
+Sun 16:12: For this compile, we estimate this process may take up to 1 hour.
+Sun 16:12: We recommend running in simulation to verify correctness before building hardware.
+Sun 16:12: 
+Sun 16:12: PRELIMINARY RESOURCE USAGE
+Sun 16:12: Logic utilization:      99309 / 172600   (57.54%)
+Sun 16:12: Multipliers (18x18):     1170 / 3180     (36.79%)
+Sun 16:12: Block memory (bits): 37230873 / 41246720 (90.26%)
+Sun 16:12: 
+Sun 16:12: (7/16) - Place and Route DFE (AlteraMPPR)
+Sun 16:12: Executing MPPR with 1 cost table and 1 thread.
+Sun 16:12: MPPR: Starting 1 cost table
+Sun 16:36: ERROR: MPPR: Failed run: Error running external tool :-
+Sun 16:36: ERROR: Problem            : [Cost table 1] external process failed: Command failed with exit code: 3
+Sun 16:36: ERROR: Command run        : export LM_LICENSE_FILE="$LM_LICENSE_FILE:$MAXCOMPILERDIR/lib/MaxCompilerQuartusLicense.dat" ;  quartus_fit MAX4PeripheryTop --64bit --write_settings_files=off --parallel=1 --set PLACEMENT_EFFORT_MULTIPLIER=2 --seed=1
+Sun 16:36: ERROR: Directory run in   : /home/fpga1/workspace_polMul/devBGV_PM_CRT_1056__/RunRules/DFEFFT1/maxfiles/Poly_Mul_FFT0_CORIA_DFE/scratch/altera_quartus/ct1/./altera_quartus
+Sun 16:36: ERROR: Exit code          : 3
+Sun 16:36: ERROR: Detailed build log : /home/fpga1/workspace_polMul/devBGV_PM_CRT_1056__/RunRules/DFEFFT1/maxfiles/Poly_Mul_FFT0_CORIA_DFE/scratch/altera_quartus/ct1/_build.log
+Sun 16:36: ERROR: Error running external tool :-
+Sun 16:36: ERROR: Problem            : Error in MPPR: [Cost table 1] external process failed: Command failed with exit code: 3
+Sun 16:36: ERROR: Command run        : export LM_LICENSE_FILE="$LM_LICENSE_FILE:$MAXCOMPILERDIR/lib/MaxCompilerQuartusLicense.dat" ;  quartus_fit MAX4PeripheryTop --64bit --write_settings_files=off --parallel=1 --set PLACEMENT_EFFORT_MULTIPLIER=2 --seed=1
+Sun 16:36: ERROR: Directory run in   : /home/fpga1/workspace_polMul/devBGV_PM_CRT_1056__/RunRules/DFEFFT1/maxfiles/Poly_Mul_FFT0_CORIA_DFE/scratch/altera_quartus/ct1/./altera_quartus
+Sun 16:36: ERROR: Exit code          : 3
+Sun 16:36: ERROR: Detailed build log : /home/fpga1/workspace_polMul/devBGV_PM_CRT_1056__/RunRules/DFEFFT1/maxfiles/Poly_Mul_FFT0_CORIA_DFE/scratch/altera_quartus/ct1/_build.log
+Sun 16:36: Building: Poly_Mul_FFT0.max file finished.
+Sun 16:36: Build process failed while trying to create Poly_Mul_FFT0.max file
+Sun 16:36: null
+Sun 16:36: Build failed: Sun Jan 10 16:36:17 CET 2016
+
+

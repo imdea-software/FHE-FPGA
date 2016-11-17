@@ -1,0 +1,593 @@
+package fft0;
+//export LM_LICENSE_FILE="$LM_LICENSE_FILE:$MAXCOMPILERDIR/lib/MaxCompilerQuartusLicense.dat"
+
+import java.io.InputStream;
+import java.lang.reflect.Array;
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.Scanner;
+
+import com.maxeler.maxcompiler.v2.kernelcompiler.Kernel;
+import com.maxeler.maxcompiler.v2.kernelcompiler.KernelParameters;
+import com.maxeler.maxcompiler.v2.kernelcompiler.stdlib.core.Count;
+import com.maxeler.maxcompiler.v2.kernelcompiler.stdlib.core.Count.CountMode;
+import com.maxeler.maxcompiler.v2.kernelcompiler.stdlib.core.Count.WrapMode;
+import com.maxeler.maxcompiler.v2.kernelcompiler.stdlib.core.CounterChain;
+import com.maxeler.maxcompiler.v2.kernelcompiler.stdlib.memory.Memory;
+import com.maxeler.maxcompiler.v2.kernelcompiler.types.base.DFEType;
+import com.maxeler.maxcompiler.v2.kernelcompiler.types.base.DFEVar;
+import com.maxeler.maxcompiler.v2.kernelcompiler.types.composite.DFEVector;
+import com.maxeler.maxcompiler.v2.kernelcompiler.types.composite.DFEVectorType;
+import com.maxeler.maxcompiler.v2.utils.Bits;
+import com.maxeler.maxcompiler.v2.utils.MathUtils;
+
+public class Poly_Mul_FFTKernel extends Kernel{
+
+    private final DFEType type;
+	private final DFEVectorType<DFEVar> vectorType;
+	Memory<DFEVar> wRom, iwRom,phiRom,iphiRom;
+	Memory<DFEVar> reverseAddressesRom;
+	Bits Wpowers[],iWpowers[], PhiPowers[],iPhiPowers[];
+	double bitReversalAddresses[];
+	DFEVar i,j,k;
+	int ramOffset =36;
+	DFEVar wPower, iwPower, rAddress,phiPower0,phiPower1,iphiPower0,iphiPower1;
+	int addrBits;
+	int N,n,PBits,PMinusBitBits,m;
+	double PMinusBit;
+	DFEVar P;
+	DFEVar iN;
+	private final DFEVar isOddk;
+	private final DFEVar isEvenj;
+	private final DFEVar isEvenk;
+//	//private final DFEVar isOddj;
+	private final  DFEVar address0;
+	private final  DFEVar address1;
+	int bit_width;
+	Poly_Mul_FFTKernel(KernelParameters params, int N,String iN, String P,int n ,int pbits, double pminusbit, int pminusbitbits, int m,int bit_width,int numticks){
+		super(params);
+		this.bit_width=bit_width;
+		this.type = dfeInt(bit_width);
+		vectorType = new DFEVectorType<DFEVar>(type,2);
+		this.N=N;
+		this.iN=convertToType(iN,type);//convertToType(stringToDoubles(iN));
+		this.P=convertToType(P,type);//convertToType(stringToDoubles(P));//=P;
+		//this.P.simWatch("P");//=(this.P-10);//.simWatch("P2",DFEVar.Radix.HEXADECIMAL);
+		this.n=n;
+		this.PBits=pbits;
+		this.PMinusBit=pminusbit;
+		this.PMinusBitBits=pminusbitbits;
+		this.m = m;
+
+
+		i = control.count.simpleCounter(32,numticks);
+		CounterChain chain = control.count.makeCounterChain();
+
+		k = chain.addCounter(numticks/(N/2), 1);
+		j = chain.addCounter(N/2, 1);
+
+		isOddk = k.slice(0)===constant.var(1);
+		isEvenj= j.slice(0)===constant.var(0);
+		isEvenk = k.slice(0)===constant.var(0);
+
+//		Memory<DFEVar> ram = mem.alloc(type, 2);
+//		DFEVar input = io.input("PhiInput",type,i===0);
+//		int offset=34;
+//
+//		input.simWatch("inputt",DFEVar.Radix.HEXADECIMAL);
+//
+//		DFEVar value = (i<=offset)? 1:
+//					    ram.read((isEvenj)?constant.var(dfeUInt(1),0)
+//					    		:constant.var(dfeUInt(1),1));
+//
+//		ram.write((isEvenj)?constant.var(dfeUInt(1),1)
+//	    		          :constant.var(dfeUInt(1),0)
+//	    		,stream.offset(newBitsModulus(value*input),-offset),constant.var(true));
+//
+//
+
+		DFEVar Waddress = getWaddress();
+
+//}
+		//}
+		i.simWatch("i");
+		k.simWatch("k");
+		j.simWatch("j");
+//		value.simWatch("value",DFEVar.Radix.HEXADECIMAL);
+
+		Wpowers=readInRomContentsBits("../data/data0/W_values.dat");
+		//iWpowers=readInRomContentsBits("../data/data0/iW_values.dat");
+		PhiPowers=readInRomContentsBits("../data/data0/phi_powers.dat");
+		//iPhiPowers=readInRomContentsBits("../data/data0/iphi_powers.dat");
+		bitReversalAddresses=readInRomContents("../data/bit_reversal_addresses.dat");
+
+		Wpowers = filterWpowers(Wpowers);
+//		iWpowers = filterWpowers(iWpowers);
+
+		//isOddj =j.slice(0)===constant.var(1);
+		address0 = (isEvenj)? j/2 : (j-1)/2+N/4;
+		address1 = (isEvenj)? j/2 : (j-1)/2+N/4;
+		//ROMS
+		reverseAddressesRom = mem.alloc(j.getType(), N/2);
+		reverseAddressesRom.setContents(bitReversalAddresses);
+
+		wRom = mem.alloc(type, N/2);//n*N/2);
+		wRom.setContents(Wpowers);
+
+//		iwRom = mem.alloc(dfeInt(bit_width),N/2);//n*N/2);
+//		iwRom.setContents(iWpowers);
+
+		phiRom = mem.alloc(dfeInt(bit_width),N);
+		phiRom.setContents(PhiPowers);
+//		iphiRom = mem.alloc(dfeInt(bit_width),N);
+//		iphiRom.setContents(iPhiPowers);
+		//
+		//reversal Address used to read in reversal bit order in last stage of both FFTs
+		rAddress = reverseAddressesRom.read(j);
+		//
+		//		//As phiRom has the powers of Phi stored in bit reversal order phiPowers, we just need to read in order
+
+		phiPower0 =phiRom.read(2*(j.cast(dfeUInt(MathUtils.bitsToAddress(N)))));//for even coeff//phiRom.read(2*(j.cast(dfeUInt(MathUtils.bitsToAddress(N*(bit_width/32))))));
+		phiPower1 =phiRom.read(2*(j.cast(dfeUInt(MathUtils.bitsToAddress(N)))) + 1);//for odd coeff// phiRom.read(2*(j.cast(dfeUInt(MathUtils.bitsToAddress(N*(bit_width/32))))) + 1);
+		//		//In the case of iPhiPower, given that its powers are stored natural order but the multiplication
+		//		//takes place in the last stage of the IFFT, it has to be customRead in natural order.
+
+		iphiPower0 = phiPower0;//iphiRom.read((j.cast(dfeUInt(MathUtils.bitsToAddress(N)))));//for even coeff
+		iphiPower1 = phiPower1;//iphiRom.read((j.cast(dfeUInt(MathUtils.bitsToAddress(N))))+N/2);//for odd coeff
+		//		//powers of W are stored in order but in last stage of FFT I customRead coeffs in bit reversal address
+		//		//so we have another ROM that has precomputed the indexes needed for customReading the powers of W
+		//		//in bit reversal order.
+		wPower = wRom.read((k<(n-1))?Waddress:rAddress);
+		//wPower = wRom.read((k<n-1)?i.cast(dfeUInt(MathUtils.bitsToAddress(n*N/2))):(i+(rAddress.cast(i.getType())-j.cast(i.getType()))).cast(dfeUInt(MathUtils.bitsToAddress(n*N/2))));
+		wPower = (k<n-1)? wPower : oo(wPower);
+
+		//		//in the case of the powers of iW we just need to customRead in order,
+		//		//but it is needed to subtract the iterations done for the FFT
+		DFEVar iRiW = (Waddress);
+		//DFEVar iRiW = (i-(n-1)*N/2).cast(dfeUInt(MathUtils.bitsToAddress(n*N/2)));
+		iwPower = wPower;//iwRom.read(iRiW);
+		//iwPower.simWatch("iWpo",DFEVar.Radix.HEXADECIMAL);
+
+		//in the last stage of the FFT we receive two final coefficients of the FFT in order that can be
+		//used right away by IFFT method. In the first stage of IFFT the multiplication of the coefficients takes place.
+//		stream.offset(value, (rAddress-j)*offset/2,-N/2*offset,N/2*offset).simWatch("HOLA",DFEVar.Radix.HEXADECIMAL);
+//		stream.offset(value, (stream.offset(rAddress, 1)-j)*offset/2,-N/2*offset,N/2*offset).simWatch("HOLAA",DFEVar.Radix.HEXADECIMAL);
+
+
+		DFEVar[] fft1 = FFT(1);
+		DFEVar[] fft2 = FFT(2);
+//
+		IFFT(fft1,fft2);
+
+	}
+
+	private DFEVar getWaddress(){
+		Count.Params countParams_value = control.count.makeParams(32)
+									    .withCountMode(CountMode.SHIFT_LEFT)
+										.withInc(1)
+										.withWrapMode(WrapMode.MODULO_MAX_OF_COUNT)
+										.withInitValue(2)
+										.withMax(constant.var(N*2-1))
+										.withEnable(j===(N/2-1));
+
+		DFEVar value = control.count.makeCounter(countParams_value).getCount();
+
+		DFEVar counter_W = control.count.simpleCounter(MathUtils.bitsToAddress(N), (N/value).cast(dfeUInt(MathUtils.bitsToAddress(N))));
+
+        Count.Params countParams = control.count.makeParams(32)
+        							.withCountMode(CountMode.NUMERIC_INCREMENTING)
+        	  						.withInc(1)
+        	  						.withWrapMode(WrapMode.COUNT_LT_MAX_THEN_WRAP)
+        	  						.withInitValue(0)
+        	  						.withMax(value.shiftRight(1))
+        	  						.withEnable(stream.offset(counter_W===0/* & k!==(N+1)*/,1));
+//        (counter_W===0).simWatch("countW");
+
+		DFEVar counter2 = control.count.makeCounter(countParams).getCount();
+
+		(counter2*N/value).simWatch("counterr");
+//		value.simWatch("value");
+//		counter_W.simWatch("counter_W");
+		return (counter2*N/value).cast(dfeUInt(MathUtils.bitsToAddress(N/2)));
+//
+	}
+	private DFEVar[] FFT(int value){
+		//local RAMs for each FFT (Ping-Pong)
+
+
+		//We need to read all the extra coeffs that the burst alignment added, but we will only use the first N ones.
+		DFEVector<DFEVar> inA = io.input("inVector" + value,vectorType,i<N/2);
+		inA[0].simWatch("inA0",DFEVar.Radix.HEXADECIMAL);
+		inA[1].simWatch("inA1",DFEVar.Radix.HEXADECIMAL);
+
+		Memory<DFEVar> ram0Ping = mem.alloc(type, N/2);//for evens
+		Memory<DFEVar> ram0Pong = mem.alloc(type, N/2);//...
+		Memory<DFEVar> ram1Ping = mem.alloc(type, N/2);//for odds
+		Memory<DFEVar> ram1Pong = mem.alloc(type, N/2);//...
+
+
+		//if(FirstStage)
+		//readLMEM*phiPower
+		//else
+		//if(StageIsOdd)
+		//readFromPing and writeInPong
+		//else
+		//readFromPong and writeInPing
+
+		//However, in the case of the last stage we read in bit reversal order
+
+		DFEVar coeff0 = (k<1)? inA[0]/*newBitsModulus(inA[0]*phiPower0)*/ : isOddk? ram0Ping.read(k<n-1?j:oo(rAddress)): ram0Pong.read(k<n-1?j:oo(rAddress));
+		DFEVar coeff1 = (k<1)? inA[1]/*newBitsModulus(inA[1]*phiPower1)*/ : isOddk? ram1Ping.read(k<n-1?j:oo(rAddress)):ram1Pong.read(k<n-1?j:oo(rAddress));
+
+		phiPower0.simWatch("Phi0",DFEVar.Radix.HEXADECIMAL);
+		phiPower1.simWatch("Phi1",DFEVar.Radix.HEXADECIMAL);
+		//k.simWatch("k");
+		//j.simWatch("j");
+		//rAddress.simWatch("rAd");
+		coeff0.simWatch("coeff0FFT",DFEVar.Radix.HEXADECIMAL);
+		coeff1.simWatch("coeff1FFT",DFEVar.Radix.HEXADECIMAL);
+		wPower.simWatch("wPo",DFEVar.Radix.HEXADECIMAL);
+
+		DFEVar butterfly0=newBitsModulus(coeff0+wPower*coeff1);//coeff0+W*coeff1;
+		DFEVar butterfly1=newBitsModulus(coeff0-wPower*coeff1);//coeff0-W*coeff1;
+
+		butterfly0.simWatch("butterfly0",DFEVar.Radix.HEXADECIMAL);
+		butterfly1.simWatch("butterfly1",DFEVar.Radix.HEXADECIMAL);
+//		(coeff0+newBitsModulus(wPower*coeff1)).simWatch("wPowercoeff1",DFEVar.Radix.HEXADECIMAL);
+//		butterfly0.simWatch("butterfly0",DFEVar.Radix.HEXADECIMAL);
+
+		//butterfly0.simWatch("butte0",DFEVar.Radix.HEXADECIMAL);
+		//(coeff0+wPower*coeff1).simWatch("butte0NOMOD",DFEVar.Radix.HEXADECIMAL);
+		//butterfly1.simWatch("butte1",DFEVar.Radix.HEXADECIMAL);
+		//As we can't have two write ports in the same ram and in each tick we calculate two coeffs of the same parity
+		//We remove parity taking one coeff of the next/previous tick in order to have different parities
+		//,that is, in order to have one write port.
+		DFEVar write0 = isEvenj? butterfly0:stream.offset(butterfly1, -1);
+		DFEVar write1 = isEvenj? stream.offset(butterfly0,1):butterfly1;
+
+		//While writing we have to add and offset to wait for the latency of calculating the values
+		//(in first 30 ticks we do not write).
+		ram0Ping.write(o(address0),o(write0) , o(isEvenk&k<n-1));
+		ram1Ping.write(o(address1),o(write1) , o(isEvenk&k<n-1));
+		ram0Pong.write(o(address0),o(write0) , o(isOddk&k<n-1));
+		ram1Pong.write(o(address1),o(write1) , o(isOddk&k<n-1));
+
+
+		//io.output("BNH" + value,butterfly0, type,oo(k)===n-1); //
+		//io.output("NHN" + value,butterfly1, type,oo(k)===n-1); //
+
+
+		return new DFEVar[]{butterfly0,butterfly1};
+//		return new DFEVar[]{constant.var(0),constant.var(0)};
+	}
+
+	private void IFFT(DFEVar fft1[],DFEVar fft2[]){
+
+//		DFEVar butterfly0 = newBitsModulus(fft1[0]);
+//		DFEVar butterfly1 = newBitsModulus(fft1[1]);
+//
+//		io.output("resultBNH",(oo(k)===n-1)?butterfly0:stream.offset(butterfly1, -N/2), type,oo(k)>=n-1); // Last stage
+//		io.output("resultNHN",stream.offset(butterfly1,(NbAl-N)/2), type,oo(k)>=n-1); // Last stage
+
+		//local RAMs for IFFT
+		Memory<DFEVar> ram0Ping = mem.alloc(type, N/2);
+		Memory<DFEVar> ram0Pong = mem.alloc(type, N/2);
+		Memory<DFEVar> ram1Ping = mem.alloc(type, N/2);
+		Memory<DFEVar> ram1Pong = mem.alloc(type, N/2);
+
+		//The algorithm of the IFFT is almost the same as FFT, except for:
+		// -We use iwPower instead of wPower
+		// -We multiply at the end by iphiPower , instead of multiplying by phiPower at the beginning
+		// -At the end we need to multiply by iN
+		// -it is needed to take count of the offset caused by the extra ticks of the FFT(methods oo(DFEVar v) and o3(DFEVar v))
+
+		//(oo(k)===n-1).simWatch("BE");
+		//fft1[0].simWatch("fft10",DFEVar.Radix.HEXADECIMAL);
+		//fft1[1].simWatch("fft11",DFEVar.Radix.HEXADECIMAL);
+
+		//DFEVar iwPower = oo(this.iwPower);
+
+		//if (FirstStage)
+			//multiply coeffs that come from FFT
+		//else
+			//if(StageIsOdd)
+				//readFromPing and writeInPong
+			//else
+ 				//readFromPong and writeInPing
+		//oo(k).simWatch("ook");
+		//oo(rAddress).simWatch("rAd");
+		//fft1[0].simWatch("fft10",DFEVar.Radix.HEXADECIMAL);
+		//fft1[1].simWatch("fft11",DFEVar.Radix.HEXADECIMAL);
+		//fft2[0].simWatch("fft20",DFEVar.Radix.HEXADECIMAL);
+		//fft2[1].simWatch("fft21",DFEVar.Radix.HEXADECIMAL);
+
+		DFEVar coeff0 =	(oo(k)===n-1)? /*newBitsModulus(*/fft1[0]*fft2[0]/*)*/ : oo(isOddk)? ram0Ping.read(j): ram0Pong.read(j);
+		DFEVar coeff1 =  (oo(k)===n-1)? /*newBitsModulus(*/fft1[1]*fft2[1]/*)*/ : oo(isOddk)? ram1Ping.read(j):ram1Pong.read(j);
+
+		//coeff0.simWatch("coeff0IFFT",DFEVar.Radix.HEXADECIMAL);
+		//coeff1.simWatch("coeff1IFFT",DFEVar.Radix.HEXADECIMAL);
+		//iwPower.simWatch("iWPo",DFEVar.Radix.HEXADECIMAL);
+		DFEVar butterfly0=newBitsModulus(coeff0+iwPower*coeff1);//coeff0+W*coeff1;
+		DFEVar butterfly1=newBitsModulus(coeff0-iwPower*coeff1);//coeff0-W*coeff1;
+
+		//butterfly0.simWatch("butterfly0",DFEVar.Radix.HEXADECIMAL);
+		//butterfly1.simWatch("butterfly1",DFEVar.Radix.HEXADECIMAL);
+
+		DFEVar write0 = isEvenj? butterfly0:stream.offset(butterfly1, -1);
+		DFEVar write1 = isEvenj? stream.offset(butterfly0,1):butterfly1;
+
+
+		ram0Ping.write(o3(address0),o(write0) , o3(isEvenk));
+		ram1Ping.write(o3(address0),o(write1) , o3(isEvenk));
+		ram0Pong.write(o3(address0),o(write0) , o3(isOddk));
+		ram1Pong.write(o3(address0),o(write1) , o3(isOddk));
+
+		DFEVar firstOutput= /*newBitsModulus(*/newBitsModulus(butterfly0*iN)/*iphiPower0)*/;
+		DFEVar secondOutput = /*newBitsModulus(*/newBitsModulus(butterfly1*iN)/*iphiPower1)*/;
+
+		//Pattern for writing in order with burstAlignment
+
+		firstOutput.simWatch("fO",DFEVar.Radix.HEXADECIMAL);
+		secondOutput.simWatch("sO",DFEVar.Radix.HEXADECIMAL);
+
+		io.output("resultBNH",firstOutput, type,oo(k)>=2*n-2); // Last stage
+		io.output("resultNHN",secondOutput, type,oo(k)>=2*n-2); // Last stage
+	//	io.output("resultBHN",firstOutput, type,oo(k)>=2*n-2); // Last stage
+	//	io.output("resultNHN",secondOutput, type,oo(k)>=2*n-2); // Last stage
+	//	io.output("resultBNH",constant.var(0).cast(dfeInt(64)), type,oo(k)>=2*n-2); // Last stage
+	//	io.output("resultNHN",constant.var(0).cast(dfeInt(64)), type,oo(k)>=2*n-2); // Last stage
+
+	}
+
+	private DFEVar o(DFEVar var){
+		return stream.offset(var, -ramOffset);
+	}
+	private DFEVar oo(DFEVar k2) {
+		return stream.offset(k2, -N);
+	}
+	//o3(k) == oo(o(k))
+	private DFEVar o3(DFEVar var){
+		return stream.offset(var, -ramOffset -N);
+	}
+	private DFEVar modulus(DFEVar number){
+		return modulus(number,P);
+	}
+	private DFEVar newBitsModulus(DFEVar number){
+		int m=this.m;
+		int i=1;
+		//number.simWatch("number",DFEVar.Radix.HEXADECIMAL);
+		//number.slice(0,PBits-1).simWatch("number0to"+(PBits-1),DFEVar.Radix.HEXADECIMAL);
+		//number.slice(0,PBits-1).cast(dfeUInt(PBits-1)).simWatch("number0to"+(PBits-1)+"cast1",DFEVar.Radix.HEXADECIMAL);
+		//number.slice(0,PBits-1).cast(dfeUInt(PBits-1)).cast(type).simWatch("number0to"+(PBits-1)+"casttype",DFEVar.Radix.HEXADECIMAL);
+		//number.slice(PBits-1,m-PBits+1).cast(dfeUInt(m-(PBits-1))).cast(type).simWatch("from"+(PBits-1)+"to"+(m-1),DFEVar.Radix.HEXADECIMAL);
+		//number.simWatch("number",DFEVar.Radix.BINARY);
+		//number.slice(PBits-1,m-PBits+1).cast(dfeUInt(m-(PBits-1))).cast(type).simWatch("from"+(PBits-1)+"to"+(m-1),DFEVar.Radix.BINARY);
+		//(number.slice(PBits-1,m-PBits+1).cast(dfeUInt(m-(PBits-1))).cast(type)*PMinusBit).simWatch("from"+(PBits-1)+"to"+(m-1),DFEVar.Radix.HEXADECIMAL);
+//		(number.slice(0,PBits-1).cast(dfeUInt(PBits-1)).cast(type)+(number.slice(PBits-1,m-PBits+1).cast(dfeUInt(m-(PBits-1))).cast(type)*PMinusBit)).simWatch("from"+(PBits-1)+"to"+(m-1),DFEVar.Radix.HEXADECIMAL);
+		while(m>PBits){
+//			number.slice(0,PBits-1).cast(dfeUInt(PBits-1)).cast(type).simWatch("TWOSCOMPLEMENTPR",DFEVar.Radix.BINARY);
+			number = (number<0)?
+					-(-number).slice(0,PBits-1).cast(dfeUInt(PBits-1)).cast(type)+(-number).slice(PBits-1,m-PBits+1).cast(dfeUInt(m-(PBits-1))).cast(type)*PMinusBit:
+						(number).slice(0,PBits-1).cast(dfeUInt(PBits-1)).cast(type)-(number).slice(PBits-1,m-PBits+1).cast(dfeUInt(m-(PBits-1))).cast(type)*PMinusBit;
+//			number.simWatch("numberIT"+i,DFEVar.Radix.DECIMAL);
+//			number.simWatch("numberIT"+i,DFEVar.Radix.HEXADECIMAL);
+//			number.simWatch("numberIT"+i,DFEVar.Radix.BINARY);
+			m=m-PBits+PMinusBitBits+2;
+			i++;
+		}
+//		number.simWatch("numberITFINISH"+i,DFEVar.Radix.HEXADECIMAL);
+//		number.simWatch("numberITFINISH"+i,DFEVar.Radix.BINARY);
+		number = (number<0)?number + P:  number;
+
+		return number;
+	}
+
+	private DFEVar bitsModulus(DFEVar number){
+		int m=this.m;
+		int i=1;
+		while(m>PBits){
+			number = /*if*/(number<0)?
+					-getNumber(-number,0,PBits-2)+getNumber(-number,PBits-1,(m-1))*PMinusBit:
+						//else
+						getNumber(number,0,PBits-2)-getNumber(number,PBits-1,(m-1))*PMinusBit;
+			m=m-PBits+PMinusBitBits+2;
+			i++;
+		}
+
+		number = (number<0)?number + P:  number;
+
+		return number;
+	}
+	private DFEVar getNumber(DFEVar number, int from, int to){
+		DFEVar a = number;
+		a = a>>from;
+		BigInteger bigNum=new BigInteger("2",10);
+		bigNum = bigNum.pow(to-from+1);
+		bigNum.subtract(new BigInteger("1"));
+		//THIS LINE HAS A BUG FROM MAXIDE
+		DFEVar b = constant.var(type,new Bits(bit_width,zeroPadding(bigNum.toString(16),bit_width/4)));
+		return a & b;
+	}
+
+//	ArrayList<BigInteger> arraylist;
+//	private DFEVar getBigDFEVar(BigInteger bigNum){
+//
+//		DFEVar b = constant.var(type,new Bits(type.getTotalBits(),zeroPadding(bigNum.toString(16),type.getTotalBits()/4)));
+//		if(arraylist.indexOf(b)==-1)
+//			arraylist.add(b);
+//		b-=1;
+//		return b;
+//	}
+
+
+	//these PhiPowers are not in order but in reversal bit order given that the input comes in such way.
+
+	private DFEVar modulus(DFEVar number, DFEVar P){
+		DFEVar result = number-((number/P))*P;
+		result = result<0? result+P:result;
+		return result;
+	}
+
+	public DFEVar isEven(DFEVar value){
+		return value.cast(dfeUInt(64)).slice(0)===0;
+	}
+	public DFEVar isOdd(DFEVar value){
+		return value.cast(dfeUInt(64)).slice(0)===1;
+	}
+
+
+//	private double[] readInRomContentsBig(String name) {
+//		InputStream is = this.getClass().getResourceAsStream(name);
+//		if (is == null) {
+//			throw new RuntimeException("No such resource: " + name);
+//		}
+//		Scanner scanner = new Scanner(is);
+//		ArrayList<String> list = new ArrayList<String>();
+//		while(scanner.hasNext()) {
+//			list.add(scanner.next());
+//		}
+//
+//		double[] result = new double[list.size()*bit_width/(4*8)];
+//		int i=0;
+//		Iterator<String> it = list.iterator();
+//		while(i<result.length)
+//		{
+//			String s=it.next();
+//			double aux[] = stringToDoubles(s);
+//			for(int j=0;j<aux.length;j++)
+//				result[i++]=aux[j];
+//			//i+=aux.length;
+//		}
+//
+//		return result;
+//	}
+	private Bits[] readInRomContentsBits(String name) {
+	InputStream is = this.getClass().getResourceAsStream(name);
+	if (is == null) {
+		throw new RuntimeException("No such resource: " + name);
+	}
+	Scanner scanner = new Scanner(is);
+	ArrayList<String> list = new ArrayList<String>();
+	while(scanner.hasNext()) {
+		list.add(scanner.next());
+	}
+	Bits bits[] = new Bits[list.size()];
+	int i=0;
+	Iterator<String> it = list.iterator();
+	while(it.hasNext())
+	{
+		String s=it.next();
+		bits[i++]=new Bits(type.getTotalBits(), zeroPadding(s,type.getTotalBits()/4));
+	}
+
+	return bits;
+}
+	//This method asserts that the input comes in DFEInt(64*a) type
+	//and the output wants to be done in a*DFEInt(64)
+	private DFEVar[] revertFromType(DFEVar Y) {
+		int numberOfElements = Y.getType().getTotalBits()/64;
+		DFEVar[] result=(DFEVar[])Array.newInstance(DFEVar.class, numberOfElements);
+		for(int i=0;i<numberOfElements;i++){
+			result[i]=Y.slice(i*64, 64).cast(dfeInt(64));
+		}
+		return result;
+	}
+
+
+	String zeroPadding(String values, int finalLength){
+		while(values.length()<finalLength)
+			values="0"+values;
+		return values;
+	}
+
+	//we have to convert to 32bit per word instead of 64 because
+	//constant.var() uses double so we could get OVERFLOW without
+	//actually having it.
+	double[] stringToDoubles(String values){
+		values = zeroPadding(values,bit_width/4);
+		double[] doubleValues = new double[(int)Math.ceil(((double)values.length())/8)];
+		int i=0;
+		String subvalue = values.substring(i,i!=0||values.length()%8==0?8+i:values.length()%8);
+		int filled=0;
+		doubleValues[filled++]=Long.parseLong(subvalue,16);
+		Bits bits[];
+		//System.out.println("subvalue["+i+"] = "+subvalue);
+		i+=values.length()%8==0?8:values.length()%8;
+		for(;i<values.length();i+=8){
+			subvalue = values.substring(i,8+i);
+			//System.out.println("subvalue["+i+"] = "+subvalue);
+			doubleValues[filled++]=Long.parseLong(subvalue,16);
+		}
+
+		return doubleValues;
+	}
+
+	// given string of number in hex base, it converts it to the proper type.
+	private DFEVar convertToType(String s, DFEType t){
+		s= zeroPadding(s, t.getTotalBits()/4);
+		Bits bits = new Bits(t.getTotalBits(), s);
+		return constant.var(t,bits);
+	}
+
+	private DFEVar convertToType(double[] y){
+		DFEVar[] x = (DFEVar[])Array.newInstance(DFEVar.class,y.length);
+		for(int i=0;i<y.length;i++)
+			x[i]=constant.var(y[i]);
+		return convertToType(x);
+	}
+
+
+
+	private DFEVar convertToType(DFEVar[] x) {
+		int wordlength = 32;
+		DFEVar result=constant.var(0).cast(dfeUInt(wordlength*x.length));
+		for(int i=0;i<x.length;i++){
+			DFEVar aux = x[i].cast(dfeUInt(wordlength*x.length));
+			aux=aux.shiftLeft(wordlength*(x.length-1-i));
+			result+=aux;
+		}
+		return result;
+	}
+
+	private DFEVar customRead(Memory<DFEVar> ram, DFEVar address){
+		int toRead = bit_width/32;
+		DFEVar[] reads = (DFEVar[]) Array.newInstance(DFEVar.class,bit_width/32);
+		for(int i=0;i<bit_width/32;i++){
+			reads[i]=ram.read(toRead*address+i);
+		}
+		return convertToType(reads);
+	}
+	private double[] readInRomContents(String name) {
+		InputStream is = this.getClass().getResourceAsStream(name);
+		if (is == null) {
+			throw new RuntimeException("No such resource: " + name);
+		}
+		Scanner scanner = new Scanner(is);
+		ArrayList<Double> list = new ArrayList<Double>();
+		while(scanner.hasNext()) {
+			list.add(Double.parseDouble(scanner.next()));
+		}
+
+		double[] result = new double[list.size()];
+
+		for (int i = 0; i < result.length; i++) {
+			result[i] = list.get(i);
+		}
+
+		return result;
+	}
+	private Bits[] filterWpowers(Bits Wpowers[]){
+		Bits returnValue[] = new Bits[N/2];
+		int fill=0;
+		//for(int i=0;i<n;i++){
+			for(int j=0;j<N/2;j++){
+				//if(j>=N/(Math.pow(2,+1)))
+					returnValue[fill++]=Wpowers[(n-1)*(N/2)+j];
+			}
+		//}
+		return returnValue;
+	}
+}
+
+

@@ -1,0 +1,5 @@
+#
+# This file is managed by MaxIDE. Do NOT change.
+#
+HEADERS:= HErandom.h bijection_CRT_Q.h context.h extended_euclidean_algorithm.h gmp_extra_functions.h 
+SOURCES:= bgv.c bijection_CRT_Q.c context.c extended_euclidean_algorithm.c gmp_extra_functions.c 
